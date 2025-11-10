@@ -102,13 +102,13 @@ The frontend for this Unraid plugin consists of `.page` files, which are `php` f
 
 ### Frontend Libraries
 
-This project uses Tabulator 6.3.1. Before implementing new features or customizations, **you must** consult the official documentation to see if a built-in solution exists. This is to avoid complication as well as wasted time and effort custom coding functions or features that are already natively handled by the Tabulator library.
+This project uses AG Grid 34.3.1. Before implementing new features or customizations, **you must** consult the official documentation to see if a built-in solution exists. This is to avoid complication as well as wasted time and effort custom coding functions or features that are already natively handled by the AG Grid library.
 
-- **`dirt-tabulator.page`**:
+- **`dirt-ag-grid.page`**:
 
-    - **Library**: Tabulator v6.3.1
+    - **Library**: AG Grid v34.3.1
 
-    - **Documentation**: [https://tabulator.info/docs/6.3](https://tabulator.info/docs/6.3 "null")
+    - **Documentation**: [https://www.ag-grid.com/javascript-data-grid/getting-started/](https://www.ag-grid.com/javascript-data-grid/getting-started/ "null")
 
 
 ### Running Tests (Playwright)
