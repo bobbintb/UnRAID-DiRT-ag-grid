@@ -54,11 +54,23 @@ Icon="fa-search-minus"
       ],
       rowData: data,
       masterDetail: true,
+      autoSizeStrategy: {
+        type: 'fitCellContents',
+      },
       groupDefaultExpanded: -1,
       detailRowAutoHeight: true,
+      defaultColDef: {
+        suppressMenu: true,
+      },
       detailCellRendererParams: (masterParams) => {
         return {
           detailGridOptions: {
+            autoSizeStrategy: {
+              type: 'fitCellContents',
+            },
+            defaultColDef: {
+              suppressMenu: true,
+            },
             columnDefs: [
               {
                 headerName: '',
