@@ -2,6 +2,25 @@ Menu="DiskUtilities"
 Title="Deduplication in Real-Time"
 Icon="fa-search-minus"
 ---
+<style>
+  .action-button {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+  }
+
+  .action-button.selected {
+    color: #007bff; /* a shade of blue */
+  }
+
+  .action-button-header {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+  }
+</style>
 <div id="grid-wrapper" style="height: 100%; width: 100%;">
   <div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
 </div>
@@ -11,6 +30,54 @@ Icon="fa-search-minus"
 
 <script>
   let socket;
+
+  class ActionHeader {
+    init(params) {
+      this.params = params;
+      this.eGui = document.createElement('div');
+
+      const linkButton = document.createElement('button');
+      linkButton.classList.add('action-button-header');
+      linkButton.innerHTML = '<i class="fa fa-link"></i>';
+      linkButton.addEventListener('click', () => {
+        this.params.api.forEachNode(rowNode => {
+          const cell = this.params.api.getCellRendererInstances({ rowNode, colKey: 'action' })[0];
+          if (cell) {
+            const button = cell.eGui.querySelector('.fa-link').parentElement;
+            const currentlySelected = cell.eGui.querySelector('.selected');
+            if (currentlySelected && currentlySelected !== button) {
+              currentlySelected.classList.remove('selected');
+            }
+            button.classList.toggle('selected');
+          }
+        });
+      });
+
+      const trashButton = document.createElement('button');
+      trashButton.classList.add('action-button-header');
+      trashButton.innerHTML = '<i class="fa fa-trash"></i>';
+      trashButton.addEventListener('click', () => {
+        this.params.api.forEachNode(rowNode => {
+          const cell = this.params.api.getCellRendererInstances({ rowNode, colKey: 'action' })[0];
+          if (cell) {
+            const button = cell.eGui.querySelector('.fa-trash').parentElement;
+            const currentlySelected = cell.eGui.querySelector('.selected');
+            if (currentlySelected && currentlySelected !== button) {
+              currentlySelected.classList.remove('selected');
+            }
+            button.classList.toggle('selected');
+          }
+        });
+      });
+
+      this.eGui.appendChild(linkButton);
+      this.eGui.appendChild(trashButton);
+    }
+
+    getGui() {
+      return this.eGui;
+    }
+  }
 
   function connect() {
     socket = new WebSocket(`ws://${window.location.hostname}:41820?clientId=dirt-tables.page`);
@@ -65,6 +132,9 @@ Icon="fa-search-minus"
       detailCellRendererParams: (masterParams) => {
         return {
           detailGridOptions: {
+            components: {
+              actionHeader: ActionHeader,
+            },
             autoSizeStrategy: {
               type: 'fitCellContents',
             },
@@ -82,6 +152,42 @@ Icon="fa-search-minus"
                   input.checked = detailParams.node.rowIndex === 0;
                   return input;
                 },
+              },
+              {
+                field: 'action',
+                headerName: '',
+                width: 100,
+                headerComponent: 'actionHeader',
+                cellRenderer: (params) => {
+                  const container = document.createElement('div');
+
+                  const linkButton = document.createElement('button');
+                  linkButton.classList.add('action-button');
+                  linkButton.innerHTML = '<i class="fa fa-link"></i>';
+                  linkButton.addEventListener('click', () => {
+                    const currentlySelected = container.querySelector('.selected');
+                    if (currentlySelected && currentlySelected !== linkButton) {
+                      currentlySelected.classList.remove('selected');
+                    }
+                    linkButton.classList.toggle('selected');
+                  });
+
+                  const trashButton = document.createElement('button');
+                  trashButton.classList.add('action-button');
+                  trashButton.innerHTML = '<i class="fa fa-trash"></i>';
+                  trashButton.addEventListener('click', () => {
+                    const currentlySelected = container.querySelector('.selected');
+                    if (currentlySelected && currentlySelected !== trashButton) {
+                      currentlySelected.classList.remove('selected');
+                    }
+                    trashButton.classList.toggle('selected');
+                  });
+
+                  container.appendChild(linkButton);
+                  container.appendChild(trashButton);
+
+                  return container;
+                }
               },
               { field: 'path', headerName: 'Path' },
               {
