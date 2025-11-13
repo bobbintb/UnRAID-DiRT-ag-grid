@@ -1,7 +1,3 @@
-Menu="DiskUtilities"
-Title="Deduplication in Real-Time"
-Icon="fa-search-minus"
----
 <div id="grid-wrapper" style="height: 100%; width: 100%;">
   <div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
 </div>
