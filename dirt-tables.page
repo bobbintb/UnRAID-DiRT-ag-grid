@@ -56,29 +56,42 @@ Icon="fa-search-minus"
       masterDetail: true,
       groupDefaultExpanded: -1,
       detailRowAutoHeight: true,
-      detailCellRendererParams: {
-        detailGridOptions: {
-          columnDefs: [
-            { field: 'path', headerName: 'Path' },
-            {
-              field: 'size',
-              headerName: 'Size',
-              valueFormatter: params => formatBytes(params.value)
-            },
-            {
-              field: 'mtime',
-              headerName: 'Modified',
-              valueFormatter: params => new Date(params.value).toLocaleString()
-            },
-            {
-              field: 'ctime',
-              headerName: 'Created',
-              valueFormatter: params => new Date(params.value).toLocaleString()
-            }
-          ]
-        },
-        getDetailRowData: params => {
-          params.successCallback(params.data.files);
+      detailCellRendererParams: (masterParams) => {
+        return {
+          detailGridOptions: {
+            columnDefs: [
+              {
+                headerName: '',
+                width: 50,
+                cellRenderer: (detailParams) => {
+                  const input = document.createElement('input');
+                  input.type = 'radio';
+                  input.name = `radio-group-${masterParams.data.hash}`;
+                  input.checked = detailParams.node.rowIndex === 0;
+                  return input;
+                },
+              },
+              { field: 'path', headerName: 'Path' },
+              {
+                field: 'size',
+                headerName: 'Size',
+                valueFormatter: params => formatBytes(params.value)
+              },
+              {
+                field: 'mtime',
+                headerName: 'Modified',
+                valueFormatter: params => new Date(params.value).toLocaleString()
+              },
+              {
+                field: 'ctime',
+                headerName: 'Created',
+                valueFormatter: params => new Date(params.value).toLocaleString()
+              }
+            ]
+          },
+          getDetailRowData: (params) => {
+            params.successCallback(params.data.files);
+          },
         }
       }
     };
