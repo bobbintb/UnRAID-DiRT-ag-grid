@@ -125,13 +125,15 @@ async function findDuplicates() {
                 })
             );
 
-            // Calculate the total size of all files in the group
-            const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+            // The size of each duplicate file is the same, so we can take the size of the first file.
+            const size = files[0].size;
+            const count = files.length;
+            const totalSize = size * (count - 1);
 
             return {
                 hash: group.hash,
-                count: files.length,
-                totalSize: totalSize,
+                count: count,
+                totalSize: totalSize, // This will be interpreted as "Reclaimable Space" by the frontend
                 files: files,
             };
         })
