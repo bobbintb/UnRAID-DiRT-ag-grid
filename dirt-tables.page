@@ -41,6 +41,32 @@ Icon="fa-search-minus"
     };
   }
 
+  function radioCellRenderer(params) {
+    const masterRowData = params.node.parent.data;
+    const detailRowData = params.data;
+
+    // Set default selection on the master data object if it's not already set
+    if (masterRowData.selectedFile === undefined) {
+      // The `files` array is available on the master row data
+      if (masterRowData.files && masterRowData.files.length > 0) {
+        masterRowData.selectedFile = masterRowData.files[0].path;
+      }
+    }
+
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = `radio_group_${masterRowData.hash}`;
+    input.checked = (detailRowData.path === masterRowData.selectedFile);
+
+    input.addEventListener('change', () => {
+      if (input.checked) {
+        masterRowData.selectedFile = detailRowData.path;
+      }
+    });
+
+    return input;
+  }
+
   function initializeGrid(data) {
     const gridOptions = {
       columnDefs: [
@@ -59,6 +85,11 @@ Icon="fa-search-minus"
       detailCellRendererParams: {
         detailGridOptions: {
           columnDefs: [
+            {
+              headerName: '',
+              width: 50,
+              cellRenderer: radioCellRenderer,
+            },
             { field: 'path', headerName: 'Path' },
             {
               field: 'size',
