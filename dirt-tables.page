@@ -44,12 +44,12 @@ Icon="fa-search-minus"
   function initializeGrid(data) {
     const gridOptions = {
       columnDefs: [
-        { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer', width: 300 },
-        { field: 'count', headerName: 'Count', width: 100 },
+        { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer', width: 350 },
+        { field: 'count', headerName: 'Count', width: 71 },
         {
           field: 'totalSize',
-          headerName: 'Reclaimable Space',
-          width: 180,
+          headerName: 'Freeable',
+          width: 90,
           valueFormatter: params => formatBytes(params.value)
         }
       ],
@@ -71,7 +71,7 @@ Icon="fa-search-minus"
             columnDefs: [
               {
                 headerName: '',
-                width: 50,
+                width: 45,
                 cellRenderer: (detailParams) => {
                   const input = document.createElement('input');
                   input.type = 'radio';
@@ -84,19 +84,19 @@ Icon="fa-search-minus"
               {
                 field: 'size',
                 headerName: 'Size',
-                width: 120,
+                width: 85,
                 valueFormatter: params => formatBytes(params.value)
               },
               {
                 field: 'mtime',
                 headerName: 'Modified',
-                width: 200,
+                width: 185,
                 valueFormatter: params => new Date(params.value).toLocaleString()
               },
               {
                 field: 'ctime',
                 headerName: 'Created',
-                width: 200,
+                width: 185,
                 valueFormatter: params => new Date(params.value).toLocaleString()
               }
             ]
