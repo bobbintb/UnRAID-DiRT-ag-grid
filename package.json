@@ -9,11 +9,9 @@
     "restart": "npm run stop && npm run start",
     "seed": "node tests/helpers/seed-redis.helper.js",
     "unraid-workaround": "tail -n +5 dirt-tabulator.page > index.php",
-    "unraid-workaround-tables": "tail -n +5 dirt-tables.page > index.php",
-    "clean:index": "rm -f index.php",
-    "clean": "rm -rf dirt_server.log jules-scratch && npm run clean:index",
+    "clean": "rm -rf dirt_server.log jules-scratch index.php",
     "prep": "npm install && playwright install && npm run seed",
-    "test": "npm run clean && npm run unraid-workaround-tables && npm run start && pytest && npm run stop"
+    "test": "npm run clean && npm run unraid-workaround && npm run start && pytest && npm run stop"
   },
   "author": "",
   "license": "ISC",
