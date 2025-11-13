@@ -6,7 +6,7 @@ Icon="fa-search-minus"
   <div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.1/dist/ag-grid-enterprise.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@34.3.1/dist/ag-grid-enterprise.min.js"></script>
 <script src="/plugins/bobbintb.system.dirt/nodejs/frontend/dirt-tabulator-helpers.js"></script>
 
 <script>
@@ -60,7 +60,8 @@ Icon="fa-search-minus"
       groupDefaultExpanded: -1,
       detailRowAutoHeight: true,
       defaultColDef: {
-        suppressMenu: true,
+        suppressHeaderMenuButton: true,
+        suppressHeaderContextMenu: true,
       },
       detailCellRendererParams: (masterParams) => {
         return {
@@ -69,7 +70,8 @@ Icon="fa-search-minus"
               type: 'fitCellContents',
             },
             defaultColDef: {
-              suppressMenu: true,
+              suppressHeaderMenuButton: true,
+              suppressHeaderContextMenu: true,
             },
             columnDefs: [
               {
@@ -109,7 +111,7 @@ Icon="fa-search-minus"
     };
 
     const gridDiv = document.querySelector('#myGrid');
-    new agGrid.Grid(gridDiv, gridOptions);
+    agGrid.createGrid(gridDiv, gridOptions);
   }
 
   function setGridHeight() {
