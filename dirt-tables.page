@@ -2,3 +2,88 @@ Menu="DiskUtilities"
 Title="Deduplication in Real-Time"
 Icon="fa-search-minus"
 ---
+<div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@31.3.1/dist/ag-grid-enterprise.min.js"></script>
+<script src="/plugins/bobbintb.system.dirt/nodejs/frontend/dirt-tabulator-helpers.js"></script>
+
+<script>
+  let socket;
+
+  function connect() {
+    socket = new WebSocket(`ws://${window.location.hostname}:41820?clientId=dirt-tables.page`);
+
+    socket.onopen = function() {
+      console.log("WebSocket connection established.");
+      socket.send(JSON.stringify({ action: 'findDuplicates' }));
+    };
+
+    socket.onmessage = function(event) {
+      const message = JSON.parse(event.data);
+      if (message.action === 'duplicateFiles') {
+        const { duplicates, state, queue } = message.data;
+        initializeGrid(duplicates);
+      }
+    };
+
+    socket.onclose = function(event) {
+      console.log("WebSocket connection closed. Reconnecting in 1 second...");
+      setTimeout(function() {
+        connect();
+      }, 1000);
+    };
+
+    socket.onerror = function(error) {
+      console.error("WebSocket error: ", error);
+      socket.close();
+    };
+  }
+
+  function initializeGrid(data) {
+    const gridOptions = {
+      columnDefs: [
+        { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer' },
+        { field: 'count', headerName: 'Count' },
+        {
+          field: 'totalSize',
+          headerName: 'Total Size',
+          valueFormatter: params => formatBytes(params.value)
+        }
+      ],
+      rowData: data,
+      masterDetail: true,
+      detailCellRendererParams: {
+        detailGridOptions: {
+          columnDefs: [
+            { field: 'path', headerName: 'Path' },
+            {
+              field: 'size',
+              headerName: 'Size',
+              valueFormatter: params => formatBytes(params.value)
+            },
+            {
+              field: 'mtime',
+              headerName: 'Modified',
+              valueFormatter: params => new Date(params.value).toLocaleString()
+            },
+            {
+              field: 'ctime',
+              headerName: 'Created',
+              valueFormatter: params => new Date(params.value).toLocaleString()
+            }
+          ]
+        },
+        getDetailRowData: params => {
+          params.successCallback(params.data.files);
+        }
+      }
+    };
+
+    const gridDiv = document.querySelector('#myGrid');
+    new agGrid.Grid(gridDiv, gridOptions);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    connect();
+  });
+</script>
