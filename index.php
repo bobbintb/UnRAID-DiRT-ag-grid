@@ -44,12 +44,14 @@
         { field: 'count', headerName: 'Count' },
         {
           field: 'totalSize',
-          headerName: 'Total Size',
+          headerName: 'Reclaimable Space',
           valueFormatter: params => formatBytes(params.value)
         }
       ],
       rowData: data,
       masterDetail: true,
+      groupDefaultExpanded: -1,
+      detailRowAutoHeight: true,
       detailCellRendererParams: {
         detailGridOptions: {
           columnDefs: [
