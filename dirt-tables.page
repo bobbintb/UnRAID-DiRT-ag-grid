@@ -80,7 +80,7 @@ Icon="fa-search-minus"
         `;
 
         this.updateHeaderState = this.updateHeaderState.bind(this);
-        this.params.api.addEventListener('modelUpdated', this.updateHeaderState);
+        this.params.api.addEventListener('cellValueChanged', this.updateHeaderState);
         this.params.api.addEventListener('firstDataRendered', this.updateHeaderState);
 
 
@@ -139,7 +139,7 @@ Icon="fa-search-minus"
 
       destroy() {
         if (this.params && this.params.api) {
-          this.params.api.removeEventListener('modelUpdated', this.updateHeaderState);
+          this.params.api.removeEventListener('cellValueChanged', this.updateHeaderState);
           this.params.api.removeEventListener('firstDataRendered', this.updateHeaderState);
         }
       }
