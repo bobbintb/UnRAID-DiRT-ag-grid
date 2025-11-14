@@ -27,3 +27,19 @@ body, html {
 .gutter.gutter-horizontal {
     cursor: col-resize;
 }
+
+.action-icon {
+    border: none;
+    background: none;
+    padding: 0 5px;
+    cursor: pointer;
+    color: #888;
+}
+
+.action-icon:hover {
+    color: #444;
+}
+
+.action-icon.selected {
+    color: #007bff;
+}

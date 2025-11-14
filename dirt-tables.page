@@ -42,6 +42,68 @@ Icon="fa-search-minus"
   }
 
   function initializeGrid(data) {
+    function actionCellRenderer(params) {
+      const eGui = document.createElement('div');
+      eGui.innerHTML = `
+        <button class="action-icon" data-action="delete"><i class="fa fa-trash"></i></button>
+        <button class="action-icon" data-action="link"><i class="fa fa-link"></i></button>
+      `;
+
+      const buttons = eGui.querySelectorAll('.action-icon');
+      buttons.forEach(button => {
+        button.addEventListener('click', () => {
+          const action = button.dataset.action;
+          if (params.data.action === action) {
+            params.data.action = null;
+          } else {
+            params.data.action = action;
+          }
+          params.api.refreshCells({ rowNodes: [params.node], force: true });
+        });
+      });
+
+      if (params.data.action) {
+        const selectedButton = eGui.querySelector(`[data-action="${params.data.action}"]`);
+        if (selectedButton) {
+          selectedButton.classList.add('selected');
+        }
+      }
+
+      return eGui;
+    }
+
+    class ActionHeaderComponent {
+      init(params) {
+        this.params = params;
+        this.eGui = document.createElement('div');
+        this.eGui.innerHTML = `
+          <button class="action-icon" data-action="delete"><i class="fa fa-trash"></i></button>
+          <button class="action-icon" data-action="link"><i class="fa fa-link"></i></button>
+        `;
+
+        this.eGui.querySelectorAll('.action-icon').forEach(button => {
+          button.addEventListener('click', () => {
+            const action = button.dataset.action;
+            const detailGridApi = this.params.api;
+            detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.action === action) {
+                rowNode.setDataValue('action', null);
+              } else {
+                rowNode.setDataValue('action', action);
+              }
+            });
+          });
+        });
+      }
+
+      getGui() {
+        return this.eGui;
+      }
+
+      destroy() {
+      }
+    }
+
     const gridOptions = {
       columnDefs: [
         { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer', width: 350 },
@@ -64,6 +126,10 @@ Icon="fa-search-minus"
       detailCellRendererParams: (masterParams) => {
         return {
           detailGridOptions: {
+            components: {
+              actionCellRenderer: actionCellRenderer,
+              actionHeaderComponent: ActionHeaderComponent,
+            },
             defaultColDef: {
               suppressHeaderMenuButton: true,
               suppressHeaderContextMenu: true,
@@ -79,6 +145,13 @@ Icon="fa-search-minus"
                   input.checked = detailParams.node.rowIndex === 0;
                   return input;
                 },
+              },
+              {
+                headerName: '',
+                field: 'action',
+                width: 70,
+                cellRenderer: 'actionCellRenderer',
+                headerComponent: 'actionHeaderComponent',
               },
               { field: 'path', headerName: 'Path', flex: 1 },
               {
