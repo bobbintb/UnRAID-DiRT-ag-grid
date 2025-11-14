@@ -55,12 +55,8 @@ Icon="fa-search-minus"
       buttons.forEach(button => {
         button.addEventListener('click', () => {
           const action = button.dataset.action;
-          if (params.data.action === action) {
-            params.data.action = null;
-          } else {
-            params.data.action = action;
-          }
-          params.api.refreshCells({ rowNodes: [params.node], force: true });
+          const newAction = params.data.action === action ? null : action;
+          params.node.setDataValue('action', newAction);
         });
       });
 
