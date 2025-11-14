@@ -83,6 +83,11 @@ Icon="fa-search-minus"
           <button class="action-icon" data-action="link"><i class="fa fa-link"></i></button>
         `;
 
+        this.updateHeaderState = this.updateHeaderState.bind(this);
+        this.params.api.addEventListener('modelUpdated', this.updateHeaderState);
+        this.params.api.addEventListener('firstDataRendered', this.updateHeaderState);
+
+
         this.eGui.querySelectorAll('.action-icon').forEach(button => {
           button.addEventListener('click', () => {
             const action = button.dataset.action;
@@ -104,11 +109,43 @@ Icon="fa-search-minus"
         });
       }
 
+      updateHeaderState() {
+        const detailGridApi = this.params.api;
+        if (detailGridApi.getDisplayedRowCount() === 0) return;
+
+        let firstAction = detailGridApi.getDisplayedRowAtIndex(0).data.action;
+        let allSame = true;
+
+        detailGridApi.forEachNode(rowNode => {
+          if (rowNode.data.action !== firstAction) {
+            allSame = false;
+          }
+        });
+
+        const trashIcon = this.eGui.querySelector('[data-action="delete"]');
+        const linkIcon = this.eGui.querySelector('[data-action="link"]');
+
+        trashIcon.classList.remove('selected');
+        linkIcon.classList.remove('selected');
+
+        if (allSame && firstAction) {
+          if (firstAction === 'delete') {
+            trashIcon.classList.add('selected');
+          } else if (firstAction === 'link') {
+            linkIcon.classList.add('selected');
+          }
+        }
+      }
+
       getGui() {
         return this.eGui;
       }
 
       destroy() {
+        if (this.params && this.params.api) {
+          this.params.api.removeEventListener('modelUpdated', this.updateHeaderState);
+          this.params.api.removeEventListener('firstDataRendered', this.updateHeaderState);
+        }
       }
     }
 
