@@ -293,9 +293,9 @@ async function main() {
             }
             case 'findDuplicates': {
               const redisClient = getRedisClient();
-              const [duplicates, state, waitingJobs] = await Promise.all([
-                  findDuplicates(),
-                  redisClient.hGetAll('state'),
+              const state = await redisClient.hGetAll('state');
+              const [duplicates, waitingJobs] = await Promise.all([
+                  findDuplicates(state),
                   actionQueue.getWaiting(),
               ]);
 

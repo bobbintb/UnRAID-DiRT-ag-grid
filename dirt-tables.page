@@ -183,7 +183,18 @@ Icon="fa-search-minus"
                   const input = document.createElement('input');
                   input.type = 'radio';
                   input.name = `radio-group-${masterParams.data.hash}`;
-                  input.checked = detailParams.node.rowIndex === 0;
+                  input.checked = detailParams.data.is_original;
+                  input.addEventListener('change', () => {
+                    if (input.checked) {
+                      socket.send(JSON.stringify({
+                        action: 'setOriginalFile',
+                        data: {
+                          hash: masterParams.data.hash,
+                          ino: detailParams.data.ino,
+                        },
+                      }));
+                    }
+                  });
                   return input;
                 },
               },
