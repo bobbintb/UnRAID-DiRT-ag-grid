@@ -1,33 +1,3 @@
-body, html {
-    height: 100%;
-    margin: 0;
-    overflow: hidden;
-}
-
-.table-container {
-    display: flex;
-    flex-direction: row;
-    height: calc(100vh - 245px);
-}
-
-.table-wrapper {
-    /* The width will be set by split.js, so we don't need flex-basis here */
-}
-
-#left-table, #right-table {
-    height: 100%;
-}
-
-.gutter {
-    background-color: #eee;
-    background-repeat: no-repeat;
-    background-position: 50%;
-}
-
-.gutter.gutter-horizontal {
-    cursor: col-resize;
-}
-
 .action-icon {
     border: none;
     background: none;
@@ -44,4 +14,10 @@ body, html {
 
 .action-icon.selected {
     color: #007bff;
+}
+
+.ag-layout-auto-height, .ag-layout-print {
+    .ag-center-cols-container, .ag-center-cols-viewport {
+        min-height: unset;
+    }
 }
