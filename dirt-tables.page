@@ -13,6 +13,7 @@ Icon="fa-search-minus"
 
 <script>
   let socket;
+  let gridApi;
 
   function connect() {
     socket = new WebSocket(`ws://${window.location.hostname}:41820?clientId=dirt-tables.page`);
@@ -27,6 +28,23 @@ Icon="fa-search-minus"
       if (message.action === 'duplicateFiles') {
         const { duplicates, state, queue } = message.data;
         initializeGrid(duplicates);
+      } else if (message.action === 'removeFile') {
+        if (!gridApi) return;
+        const { ino } = message.data;
+        gridApi.forEachNode(masterNode => {
+          const fileToRemove = masterNode.data.files.find(file => file.ino === ino);
+          if (fileToRemove) {
+            const masterData = masterNode.data;
+            if (masterData.files.length <= 2) {
+              gridApi.applyTransaction({ remove: [masterData] });
+            } else {
+              masterData.files = masterData.files.filter(file => file.ino !== ino);
+              masterData.count = masterData.files.length;
+              masterData.totalSize = masterData.totalSize - fileToRemove.size;
+              gridApi.applyTransaction({ update: [masterData] });
+            }
+          }
+        });
       }
     };
 
@@ -157,7 +175,11 @@ Icon="fa-search-minus"
         }
       ],
       rowData: data,
+      onGridReady: (params) => {
+        gridApi = params.api;
+      },
       masterDetail: true,
+      getRowId: params => params.data.hash,
       groupDefaultExpanded: -1,
       detailRowAutoHeight: true,
       defaultColDef: {
@@ -175,6 +197,7 @@ Icon="fa-search-minus"
               suppressHeaderMenuButton: true,
               suppressHeaderContextMenu: true,
             },
+            getRowId: params => params.data.ino,
             columnDefs: [
               {
                 headerName: '',
