@@ -87,12 +87,18 @@ Icon="fa-search-minus"
           button.addEventListener('click', () => {
             const action = button.dataset.action;
             const detailGridApi = this.params.api;
+
+            let allSelected = true;
             detailGridApi.forEachNode(rowNode => {
-              if (rowNode.data.action === action) {
-                rowNode.setDataValue('action', null);
-              } else {
-                rowNode.setDataValue('action', action);
+              if (rowNode.data.action !== action) {
+                allSelected = false;
               }
+            });
+
+            const newAction = allSelected ? null : action;
+
+            detailGridApi.forEachNode(rowNode => {
+              rowNode.setDataValue('action', newAction);
             });
           });
         });
