@@ -1,4 +1,5 @@
 const fs = require('fs');
+const broadcaster = require('./broadcaster');
 const { getFileMetadataRepository, getRedisPublisherClient } = require('./redis.js');
 const { getShareFromPath } = require('./utils.js');
 const { getFileStats } = require('./scan.js');
@@ -69,6 +70,13 @@ const handleUpsert = async (job, workerPool) => {
   }
 
   console.log(`[HANDLER] Finished processing upsert for ${upsertedPath}`);
+  broadcaster.broadcast({
+    type: 'filesystem-update',
+    data: {
+      source: 'upsert',
+      path: upsertedPath,
+    }
+  });
 };
 
 const handleRemove = async (job) => {
@@ -122,6 +130,13 @@ const handleRemove = async (job) => {
         console.warn(`[HANDLER] Path '${removedPath}' not found in record ${ino}, despite being found by search. No action taken.`);
       }
     }
+    broadcaster.broadcast({
+      type: 'filesystem-update',
+      data: {
+        source: 'remove',
+        path: removedPath,
+      }
+    });
   } catch (error) {
     console.error(`[HANDLER] Error processing file.removed job for path ${removedPath}:`, error);
     throw error;
@@ -169,7 +184,14 @@ const handleRename = async (job) => {
     const entityIdSymbol = Object.getOwnPropertySymbols(fileEntity).find(s => s.description === 'entityId');
     const ino = entityIdSymbol ? fileEntity[entityIdSymbol] : '[unknown]';
     console.log(`[HANDLER] Successfully updated path for ino ${ino}. New path: ${newPath}`);
-
+    broadcaster.broadcast({
+      type: 'filesystem-update',
+      data: {
+        source: 'rename',
+        oldPath: oldPath,
+        newPath: newPath,
+      }
+    });
   } catch (error) {
     console.error(`[HANDLER] Error processing file.rename job from ${oldPath} to ${newPath}:`, error);
     // Re-throw the error to allow BullMQ to handle the job failure (e.g., retry).
