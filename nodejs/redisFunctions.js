@@ -77,7 +77,7 @@ async function getAllFiles() {
     return await repository.search().return.all();
 }
 
-async function findDuplicates() {
+async function findDuplicates(state = {}) {
     const repository = getFileMetadataRepository();
     const redisClient = getRedisClient();
 
@@ -113,6 +113,7 @@ async function findDuplicates() {
                     // Extract the entity ID from the full Redis key (e.g., 'ino:12345')
                     const entityId = key.split(':').pop();
                     const fileEntity = await repository.fetch(entityId);
+                    const is_original = state[group.hash] ? (state[group.hash] === entityId) : index === 0;
                     return {
                         ino: entityId,
                         path: fileEntity.path.join('<br>'), // Join for display on new lines
@@ -120,7 +121,7 @@ async function findDuplicates() {
                         atime: fileEntity.atime,
                         mtime: fileEntity.mtime,
                         ctime: fileEntity.ctime,
-                        isFirstChild: index === 0, // Flag the first child for default radio selection
+                        is_original: is_original,
                     };
                 })
             );
