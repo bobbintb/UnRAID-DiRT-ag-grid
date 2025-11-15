@@ -27,6 +27,21 @@ Icon="fa-search-minus"
       const message = JSON.parse(event.data);
       if (message.action === 'duplicateFiles') {
         const { duplicates, state, queue } = message.data;
+        // Integrate the queue state into the duplicates data
+        duplicates.forEach(masterRow => {
+          masterRow.files.forEach(file => {
+            // The queue stores actions against a single file path. A file might have multiple
+            // paths (hard links), which are joined by <br> in the 'path' property.
+            // We need to check if any of the file's paths are in the queue.
+            const paths = file.path.split('<br>');
+            for (const path of paths) {
+              if (queue[path]) {
+                file.action = queue[path];
+                break; // Found the action, no need to check other paths
+              }
+            }
+          });
+        });
         initializeGrid(duplicates);
       } else if (message.action === 'removeFile') {
         if (!gridApi) return;
@@ -72,9 +87,36 @@ Icon="fa-search-minus"
       const buttons = eGui.querySelectorAll('.action-icon');
       buttons.forEach(button => {
         button.addEventListener('click', () => {
+          if (params.data.is_original) {
+            return; // Ignore clicks on the original (disabled) row
+          }
           const action = button.dataset.action;
           const newAction = params.data.action === action ? null : action;
+
+          // First, update the grid state locally for immediate feedback
           params.node.setDataValue('action', newAction);
+
+          // Then, send the update to the backend to persist the state
+          if (newAction) {
+            // A file can have multiple paths (hard links). We only need to send one path
+            // to the backend for it to be added to the action queue.
+            const primaryPath = params.data.path.split('<br>')[0];
+            socket.send(JSON.stringify({
+              action: 'setFileAction',
+              data: {
+                ino: params.data.ino,
+                path: primaryPath,
+                action: newAction,
+              },
+            }));
+          } else {
+            socket.send(JSON.stringify({
+              action: 'removeFileAction',
+              data: {
+                ino: params.data.ino,
+              },
+            }));
+          }
         });
       });
 
@@ -108,17 +150,46 @@ Icon="fa-search-minus"
             const detailGridApi = this.params.api;
 
             let allSelected = true;
+            let hasEligibleRows = false;
             detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.is_original) return; // Skip the original row
+              hasEligibleRows = true;
               if (rowNode.data.action !== action) {
                 allSelected = false;
               }
             });
 
-            const newAction = allSelected ? null : action;
+            // Toggle only if there's at least one eligible row
+            const newAction = (allSelected && hasEligibleRows) ? null : action;
 
-            detailGridApi.forEachNode(rowNode => {
-              rowNode.setDataValue('action', newAction);
-            });
+            if (hasEligibleRows) {
+              detailGridApi.forEachNode(rowNode => {
+                if (rowNode.data.is_original) return; // Skip the original row
+
+                // Update local state for immediate feedback
+                rowNode.setDataValue('action', newAction);
+
+                // Persist the change to the backend
+                const primaryPath = rowNode.data.path.split('<br>')[0];
+                if (newAction) {
+                  socket.send(JSON.stringify({
+                    action: 'setFileAction',
+                    data: {
+                      ino: rowNode.data.ino,
+                      path: primaryPath,
+                      action: newAction,
+                    },
+                  }));
+                } else {
+                  socket.send(JSON.stringify({
+                    action: 'removeFileAction',
+                    data: {
+                      ino: rowNode.data.ino,
+                    },
+                  }));
+                }
+              });
+            }
           });
         });
       }
@@ -198,6 +269,9 @@ Icon="fa-search-minus"
               suppressHeaderContextMenu: true,
             },
             getRowId: params => params.data.ino,
+            rowClassRules: {
+              'disabled-row': params => params.data.is_original,
+            },
             columnDefs: [
               {
                 headerName: '',
@@ -209,13 +283,37 @@ Icon="fa-search-minus"
                   input.checked = detailParams.data.is_original;
                   input.addEventListener('change', () => {
                     if (input.checked) {
+                      const newOriginalIno = detailParams.data.ino;
+                      const detailGridApi = detailParams.api;
+
+                      // Send the state update to the backend
                       socket.send(JSON.stringify({
                         action: 'setOriginalFile',
                         data: {
                           hash: masterParams.data.hash,
-                          ino: detailParams.data.ino,
+                          ino: newOriginalIno,
                         },
                       }));
+
+                      // When a row is selected as the original, clear its action state
+                      socket.send(JSON.stringify({
+                        action: 'removeFileAction',
+                        data: {
+                          ino: newOriginalIno,
+                        },
+                      }));
+
+                      // Update the grid state locally for immediate feedback
+                      detailGridApi.forEachNode(node => {
+                        const isNewOriginal = node.data.ino === newOriginalIno;
+                        if (node.data.is_original !== isNewOriginal) {
+                          node.setDataValue('is_original', isNewOriginal);
+                        }
+                        // Also clear the action in the local grid data
+                        if (isNewOriginal) {
+                          node.setDataValue('action', null);
+                        }
+                      });
                     }
                   });
                   return input;
