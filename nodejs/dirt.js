@@ -251,9 +251,10 @@ async function main() {
                 console.error(`[DIRT] Invalid data for setFileAction:`, data);
                 break;
               }
+              const jobId = `job-${ino}`;
               // Remove-then-add strategy
-              await actionQueue.remove(ino);
-              await actionQueue.add(action, { path }, { jobId: ino });
+              await actionQueue.remove(jobId);
+              await actionQueue.add(action, { path }, { jobId });
               console.log(`[DIRT] Action queue job SET for ino ${ino} to action '${action}'`);
               break;
             }
@@ -263,7 +264,8 @@ async function main() {
                 console.error(`[DIRT] Invalid data for removeFileAction:`, data);
                 break;
               }
-              await actionQueue.remove(ino);
+              const jobId = `job-${ino}`;
+              await actionQueue.remove(jobId);
               console.log(`[DIRT] Action queue job REMOVED for ino ${ino}`);
               break;
             }
