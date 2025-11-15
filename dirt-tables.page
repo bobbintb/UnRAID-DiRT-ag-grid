@@ -27,7 +27,51 @@ Icon="fa-search-minus"
       const message = JSON.parse(event.data);
       if (message.action === 'duplicateFiles') {
         const { duplicates, state, queue } = message.data;
+
+        duplicates.forEach(masterRow => {
+          masterRow.files.forEach(file => {
+            const paths = file.path.split('<br>');
+            for (const path of paths) {
+              if (queue[path]) {
+                file.action = queue[path];
+                break;
+              }
+            }
+          });
+        });
+
         initializeGrid(duplicates);
+      } else if (message.action === 'originalFileChanged') {
+        if (!gridApi) return;
+        const { hash, ino: newOriginalIno } = message.data;
+
+        const masterNode = gridApi.getRowNode(hash);
+        if (masterNode && masterNode.detailNode) {
+          const detailGridApi = masterNode.detailNode.getDetailGridInfo().api;
+          const rowsToUpdate = [];
+
+          detailGridApi.forEachNode(node => {
+            const isNewOriginal = node.data.ino === newOriginalIno;
+
+            // Determine if the node's state needs to change
+            const needsUpdate = (node.data.is_original !== isNewOriginal) || (isNewOriginal && node.data.action);
+
+            if (needsUpdate) {
+              // Create a new object for the update, treating the original data as immutable.
+              // This is the correct pattern to prevent state corruption in AG-Grid.
+              const updatedData = { ...node.data };
+              updatedData.is_original = isNewOriginal;
+              if (isNewOriginal) {
+                updatedData.action = null;
+              }
+              rowsToUpdate.push(updatedData);
+            }
+          });
+
+          if (rowsToUpdate.length > 0) {
+            detailGridApi.applyTransaction({ update: rowsToUpdate });
+          }
+        }
       } else if (message.action === 'removeFile') {
         if (!gridApi) return;
         const { ino } = message.data;
@@ -72,9 +116,32 @@ Icon="fa-search-minus"
       const buttons = eGui.querySelectorAll('.action-icon');
       buttons.forEach(button => {
         button.addEventListener('click', () => {
+          if (params.data.is_original) {
+            return;
+          }
           const action = button.dataset.action;
           const newAction = params.data.action === action ? null : action;
+
           params.node.setDataValue('action', newAction);
+
+          if (newAction) {
+            const primaryPath = params.data.path.split('<br>')[0];
+            socket.send(JSON.stringify({
+              action: 'setFileAction',
+              data: {
+                ino: params.data.ino,
+                path: primaryPath,
+                action: newAction,
+              },
+            }));
+          } else {
+            socket.send(JSON.stringify({
+              action: 'removeFileAction',
+              data: {
+                ino: params.data.ino,
+              },
+            }));
+          }
         });
       });
 
@@ -108,16 +175,39 @@ Icon="fa-search-minus"
             const detailGridApi = this.params.api;
 
             let allSelected = true;
+            let hasEligibleRows = false;
             detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.is_original) return;
+              hasEligibleRows = true;
               if (rowNode.data.action !== action) {
                 allSelected = false;
               }
             });
 
-            const newAction = allSelected ? null : action;
+            const newAction = (allSelected && hasEligibleRows) ? null : action;
 
             detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.is_original) return;
               rowNode.setDataValue('action', newAction);
+
+              const primaryPath = rowNode.data.path.split('<br>')[0];
+              if (newAction) {
+                socket.send(JSON.stringify({
+                  action: 'setFileAction',
+                  data: {
+                    ino: rowNode.data.ino,
+                    path: primaryPath,
+                    action: newAction,
+                  },
+                }));
+              } else {
+                socket.send(JSON.stringify({
+                  action: 'removeFileAction',
+                  data: {
+                    ino: rowNode.data.ino,
+                  },
+                }));
+              }
             });
           });
         });
@@ -198,6 +288,9 @@ Icon="fa-search-minus"
               suppressHeaderContextMenu: true,
             },
             getRowId: params => params.data.ino,
+            rowClassRules: {
+              'disabled-row': params => params.data.is_original,
+            },
             columnDefs: [
               {
                 headerName: '',
@@ -209,11 +302,23 @@ Icon="fa-search-minus"
                   input.checked = detailParams.data.is_original;
                   input.addEventListener('change', () => {
                     if (input.checked) {
+                      const newOriginalIno = detailParams.data.ino;
+
+                      // Send the state update to the backend. The backend will now
+                      // broadcast the change back to all clients.
                       socket.send(JSON.stringify({
                         action: 'setOriginalFile',
                         data: {
                           hash: masterParams.data.hash,
-                          ino: detailParams.data.ino,
+                          ino: newOriginalIno,
+                        },
+                      }));
+
+                      // Also send the message to clear the action state.
+                      socket.send(JSON.stringify({
+                        action: 'removeFileAction',
+                        data: {
+                          ino: newOriginalIno,
                         },
                       }));
                     }
