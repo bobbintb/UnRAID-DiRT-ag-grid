@@ -27,7 +27,55 @@ Icon="fa-search-minus"
       const message = JSON.parse(event.data);
       if (message.action === 'duplicateFiles') {
         const { duplicates, state, queue } = message.data;
+
+        duplicates.forEach(masterRow => {
+          masterRow.files.forEach(file => {
+            const paths = file.path.split('<br>');
+            for (const path of paths) {
+              if (queue[path]) {
+                file.action = queue[path];
+                break;
+              }
+            }
+          });
+        });
+
         initializeGrid(duplicates);
+      } else if (message.action === 'originalFileChanged') {
+        if (!gridApi) return;
+        const { hash, ino: newOriginalIno } = message.data;
+
+        const masterNode = gridApi.getRowNode(hash);
+        if (masterNode && masterNode.detailNode) {
+          const detailGridApi = masterNode.detailNode.getDetailGridInfo().api;
+          const nodesToRefresh = [];
+
+          detailGridApi.forEachNode(node => {
+            const isNewOriginal = node.data.ino === newOriginalIno;
+            let dataChanged = false;
+
+            if (node.data.is_original !== isNewOriginal) {
+              node.data.is_original = isNewOriginal;
+              dataChanged = true;
+            }
+
+            if (isNewOriginal && node.data.action) {
+              node.data.action = null;
+              dataChanged = true;
+            }
+
+            if (dataChanged) {
+              nodesToRefresh.push(node);
+            }
+          });
+
+          if (nodesToRefresh.length > 0) {
+            // Force a refresh of the cells for the updated rows. This is a more forceful
+            // approach than applyTransaction and ensures the cell renderers are re-run,
+            // correctly updating the action icons and row styles.
+            detailGridApi.refreshCells({ force: true, rowNodes: nodesToRefresh });
+          }
+        }
       } else if (message.action === 'removeFile') {
         if (!gridApi) return;
         const { ino } = message.data;
@@ -70,20 +118,47 @@ Icon="fa-search-minus"
       `;
 
       const buttons = eGui.querySelectorAll('.action-icon');
-      buttons.forEach(button => {
-        button.addEventListener('click', () => {
-          const action = button.dataset.action;
-          const newAction = params.data.action === action ? null : action;
-          params.node.setDataValue('action', newAction);
-        });
-      });
 
+      // Stateless Renderer Logic: Always reset the state before setting it.
+      // This ensures that on a refresh, old state is cleared correctly.
+      buttons.forEach(btn => btn.classList.remove('selected'));
       if (params.data.action) {
         const selectedButton = eGui.querySelector(`[data-action="${params.data.action}"]`);
         if (selectedButton) {
           selectedButton.classList.add('selected');
         }
       }
+
+      buttons.forEach(button => {
+        button.addEventListener('click', () => {
+          if (params.data.is_original) {
+            return;
+          }
+          const action = button.dataset.action;
+          const newAction = params.data.action === action ? null : action;
+
+          params.node.setDataValue('action', newAction);
+
+          if (newAction) {
+            const primaryPath = params.data.path.split('<br>')[0];
+            socket.send(JSON.stringify({
+              action: 'setFileAction',
+              data: {
+                ino: params.data.ino,
+                path: primaryPath,
+                action: newAction,
+              },
+            }));
+          } else {
+            socket.send(JSON.stringify({
+              action: 'removeFileAction',
+              data: {
+                ino: params.data.ino,
+              },
+            }));
+          }
+        });
+      });
 
       return eGui;
     }
@@ -108,16 +183,39 @@ Icon="fa-search-minus"
             const detailGridApi = this.params.api;
 
             let allSelected = true;
+            let hasEligibleRows = false;
             detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.is_original) return;
+              hasEligibleRows = true;
               if (rowNode.data.action !== action) {
                 allSelected = false;
               }
             });
 
-            const newAction = allSelected ? null : action;
+            const newAction = (allSelected && hasEligibleRows) ? null : action;
 
             detailGridApi.forEachNode(rowNode => {
+              if (rowNode.data.is_original) return;
               rowNode.setDataValue('action', newAction);
+
+              const primaryPath = rowNode.data.path.split('<br>')[0];
+              if (newAction) {
+                socket.send(JSON.stringify({
+                  action: 'setFileAction',
+                  data: {
+                    ino: rowNode.data.ino,
+                    path: primaryPath,
+                    action: newAction,
+                  },
+                }));
+              } else {
+                socket.send(JSON.stringify({
+                  action: 'removeFileAction',
+                  data: {
+                    ino: rowNode.data.ino,
+                  },
+                }));
+              }
             });
           });
         });
@@ -198,6 +296,9 @@ Icon="fa-search-minus"
               suppressHeaderContextMenu: true,
             },
             getRowId: params => params.data.ino,
+            rowClassRules: {
+              'disabled-row': params => params.data.is_original,
+            },
             columnDefs: [
               {
                 headerName: '',
@@ -209,11 +310,23 @@ Icon="fa-search-minus"
                   input.checked = detailParams.data.is_original;
                   input.addEventListener('change', () => {
                     if (input.checked) {
+                      const newOriginalIno = detailParams.data.ino;
+
+                      // Send the state update to the backend. The backend will now
+                      // broadcast the change back to all clients.
                       socket.send(JSON.stringify({
                         action: 'setOriginalFile',
                         data: {
                           hash: masterParams.data.hash,
-                          ino: detailParams.data.ino,
+                          ino: newOriginalIno,
+                        },
+                      }));
+
+                      // Also send the message to clear the action state.
+                      socket.send(JSON.stringify({
+                        action: 'removeFileAction',
+                        data: {
+                          ino: newOriginalIno,
                         },
                       }));
                     }
