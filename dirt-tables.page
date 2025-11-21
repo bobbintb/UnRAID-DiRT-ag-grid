@@ -2,6 +2,7 @@ Menu="DiskUtilities"
 Title="Deduplication in Real-Time"
 Icon="fa-search-minus"
 ---
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 <link rel="stylesheet" type="text/css" href="/plugins/bobbintb.system.dirt/nodejs/frontend/css/dirt.css">
 
 <div id="grid-wrapper" style="height: 100%; width: 100%;">
@@ -191,7 +192,7 @@ Icon="fa-search-minus"
 
     const gridOptions = {
       columnDefs: [
-        { field: 'hash', headerName: 'Hash', width: 350 },
+        { field: 'hash', headerName: 'Hash', cellRenderer: window.MasterToggleRenderer, width: 350 },
         { field: 'count', headerName: 'Count', width: 71 },
         {
           field: 'totalSize',

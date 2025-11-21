@@ -2,13 +2,81 @@ window.flattenMasterDetailData = function(data) {
   const flattened = [];
   if (!data) return flattened;
   data.forEach(item => {
+    if (item._expanded === undefined) item._expanded = true;
     flattened.push(item);
-    flattened.push({
-      _isDetailRow: true,
-      _masterData: item
-    });
+    if (item._expanded) {
+      flattened.push({
+        _isDetailRow: true,
+        _masterData: item
+      });
+    }
   });
   return flattened;
+};
+
+window.MasterToggleRenderer = class MasterToggleRenderer {
+  init(params) {
+    this.params = params;
+    this.eGui = document.createElement('div');
+    this.eGui.style.display = 'flex';
+    this.eGui.style.alignItems = 'center';
+    this.eGui.style.height = '100%';
+
+    this.eIcon = document.createElement('i');
+    const isExpanded = params.data._expanded !== false;
+    this.eIcon.className = isExpanded ? 'fa fa-minus-square-o' : 'fa fa-plus-square-o';
+    this.eIcon.style.cursor = 'pointer';
+    this.eIcon.style.marginRight = '5px';
+    this.eIcon.onclick = this.onToggle.bind(this);
+
+    this.eValue = document.createElement('span');
+    this.eValue.innerText = params.value;
+
+    this.eGui.appendChild(this.eIcon);
+    this.eGui.appendChild(this.eValue);
+  }
+
+  getGui() {
+    return this.eGui;
+  }
+
+  onToggle(event) {
+    event.stopPropagation();
+    const data = this.params.data;
+    const wasExpanded = data._expanded !== false;
+    const nowExpanded = !wasExpanded;
+    data._expanded = nowExpanded;
+
+    this.eIcon.className = nowExpanded ? 'fa fa-minus-square-o' : 'fa fa-plus-square-o';
+
+    const api = this.params.api;
+    if (nowExpanded) {
+      const masterNode = this.params.node;
+      const insertIndex = masterNode.rowIndex + 1;
+
+      const detailRow = {
+        _isDetailRow: true,
+        _masterData: data
+      };
+
+      api.applyTransaction({
+        add: [detailRow],
+        addIndex: insertIndex
+      });
+    } else {
+      const detailId = data.hash + '_detail';
+      const detailNode = api.getRowNode(detailId);
+      if (detailNode) {
+        api.applyTransaction({
+          remove: [detailNode.data]
+        });
+      }
+    }
+  }
+
+  refresh(params) {
+    return false;
+  }
 };
 
 window.enableMasterDetail = function(gridOptions) {
@@ -35,7 +103,6 @@ window.enableMasterDetail = function(gridOptions) {
       const config = detailCellRendererParamsFunc(masterParams);
       const detailGridOptions = config.detailGridOptions;
 
-      // Get data
       let rowData = [];
       if (config.getDetailRowData) {
         config.getDetailRowData({
@@ -48,7 +115,6 @@ window.enableMasterDetail = function(gridOptions) {
 
       detailGridOptions.rowData = rowData;
 
-      // Create Grid
       this.detailApi = agGrid.createGrid(this.eGui, detailGridOptions);
     }
 
@@ -78,27 +144,26 @@ window.enableMasterDetail = function(gridOptions) {
     if (params.data && params.data._isDetailRow) {
       const masterFiles = params.data._masterData.files;
       const count = masterFiles ? masterFiles.length : 0;
-      // Formula: (count * 28) + 33 + 60
       return (count * 28) + 33 + 60;
     }
     if (originalGetRowHeight) {
       return originalGetRowHeight(params);
     }
-    // Default height for Balham theme is usually 28px
     return 28;
   };
 
   const originalGetRowId = gridOptions.getRowId;
   gridOptions.getRowId = function(params) {
-      if (params.data._isDetailRow) {
-           const masterId = originalGetRowId ? originalGetRowId({ data: params.data._masterData }) : params.data._masterData.hash;
-           return masterId + '_detail';
-      }
-      if (originalGetRowId) {
-          return originalGetRowId(params);
-      }
-      // Fallback if originalGetRowId is not defined, though it should be.
-      return params.data.hash;
+    if (params.data._isDetailRow) {
+      const masterId = originalGetRowId ? originalGetRowId({
+        data: params.data._masterData
+      }) : params.data._masterData.hash;
+      return masterId + '_detail';
+    }
+    if (originalGetRowId) {
+      return originalGetRowId(params);
+    }
+    return params.data.hash;
   };
 
   return gridOptions;
