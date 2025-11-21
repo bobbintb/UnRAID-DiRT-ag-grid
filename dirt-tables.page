@@ -8,7 +8,7 @@ Icon="fa-search-minus"
   <div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@34.3.1/dist/ag-grid-enterprise.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@34.3.1/dist/ag-grid-community.min.js"></script>
 <script src="/plugins/bobbintb.system.dirt/nodejs/frontend/dirt-tables-helpers.js"></script>
 
 <script>
@@ -32,16 +32,36 @@ Icon="fa-search-minus"
         if (!gridApi) return;
         const { ino } = message.data;
         gridApi.forEachNode(masterNode => {
+          if (masterNode.data._type !== 'master') return;
+
           const fileToRemove = masterNode.data.files.find(file => file.ino === ino);
           if (fileToRemove) {
             const masterData = masterNode.data;
             if (masterData.files.length <= 2) {
-              gridApi.applyTransaction({ remove: [masterData] });
+              // Remove both master and detail rows
+              const detailNodeId = masterData.hash + '_detail';
+              const detailNode = gridApi.getRowNode(detailNodeId);
+              const rowsToRemove = [masterData];
+              if (detailNode) {
+                rowsToRemove.push(detailNode.data);
+              }
+              gridApi.applyTransaction({ remove: rowsToRemove });
             } else {
               masterData.files = masterData.files.filter(file => file.ino !== ino);
               masterData.count = masterData.files.length;
               masterData.totalSize = masterData.totalSize - fileToRemove.size;
+
+              // Update master row
               gridApi.applyTransaction({ update: [masterData] });
+
+              // Refresh detail row to reflect changes in files array
+              const detailNodeId = masterData.hash + '_detail';
+              const detailNode = gridApi.getRowNode(detailNodeId);
+              if (detailNode) {
+                gridApi.refreshCells({ rowNodes: [detailNode], force: true });
+                // Recalculate row heights as the number of files changed
+                gridApi.resetRowHeights();
+              }
             }
           }
         });
@@ -163,9 +183,121 @@ Icon="fa-search-minus"
       }
     }
 
+    class DetailCellRenderer {
+      init(params) {
+        this.eGui = document.createElement('div');
+        this.eGui.style.width = '100%';
+        this.eGui.style.height = '100%';
+        // Add a wrapper for padding if needed, matching standard detail row
+        this.eGui.style.padding = '20px';
+        this.eGui.style.boxSizing = 'border-box';
+
+        // Inner container for the grid
+        const gridContainer = document.createElement('div');
+        gridContainer.style.width = '100%';
+        gridContainer.style.height = '100%';
+        gridContainer.className = 'ag-theme-balham ag-details-grid'; // Add class for styling/testing
+        this.eGui.appendChild(gridContainer);
+
+        const masterHash = params.data.parent.hash;
+
+        const detailGridOptions = {
+          rowData: params.data.parent.files,
+          domLayout: 'autoHeight',
+          components: {
+            actionCellRenderer: actionCellRenderer,
+            actionHeaderComponent: ActionHeaderComponent,
+          },
+          defaultColDef: {
+            suppressHeaderMenuButton: true,
+            suppressHeaderContextMenu: true,
+          },
+          getRowId: params => params.data.ino,
+          columnDefs: [
+            {
+              headerName: '',
+              width: 45,
+              cellRenderer: (detailParams) => {
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = `radio-group-${masterHash}`;
+                input.checked = detailParams.data.is_original;
+                input.addEventListener('change', () => {
+                  if (input.checked) {
+                    socket.send(JSON.stringify({
+                      action: 'setOriginalFile',
+                      data: {
+                        hash: masterHash,
+                        ino: detailParams.data.ino,
+                      },
+                    }));
+                  }
+                });
+                return input;
+              },
+            },
+            {
+              headerName: '',
+              field: 'action',
+              width: 70,
+              cellRenderer: 'actionCellRenderer',
+              headerComponent: 'actionHeaderComponent',
+            },
+            { field: 'path', headerName: 'Path', flex: 1 },
+            {
+              field: 'size',
+              headerName: 'Size',
+              width: 85,
+              valueFormatter: params => formatBytes(params.value)
+            },
+            {
+              field: 'mtime',
+              headerName: 'Modified',
+              width: 185,
+              valueFormatter: params => new Date(params.value).toLocaleString()
+            },
+            {
+              field: 'ctime',
+              headerName: 'Created',
+              width: 185,
+              valueFormatter: params => new Date(params.value).toLocaleString()
+            }
+          ]
+        };
+
+        this.detailGridApi = agGrid.createGrid(gridContainer, detailGridOptions).api;
+      }
+
+      getGui() {
+        return this.eGui;
+      }
+
+      refresh(params) {
+        if (this.detailGridApi) {
+          this.detailGridApi.setGridOption('rowData', params.data.parent.files);
+          return true;
+        }
+        return false;
+      }
+
+      destroy() {
+        if (this.detailGridApi) {
+           this.detailGridApi.destroy();
+        }
+      }
+    }
+
+    // Flatten data for Master/Detail simulation
+    const rowData = [];
+    data.forEach(group => {
+      const masterRow = { ...group, _type: 'master' };
+      rowData.push(masterRow);
+      rowData.push({ _type: 'detail', parent: masterRow });
+    });
+
     const gridOptions = {
       columnDefs: [
-        { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer', width: 350 },
+        { field: 'hash', headerName: 'Hash', width: 350 },
         { field: 'count', headerName: 'Count', width: 71 },
         {
           field: 'totalSize',
@@ -174,86 +306,30 @@ Icon="fa-search-minus"
           valueFormatter: params => formatBytes(params.value)
         }
       ],
-      rowData: data,
+      rowData: rowData,
       onGridReady: (params) => {
         gridApi = params.api;
       },
-      masterDetail: true,
-      getRowId: params => params.data.hash,
-      groupDefaultExpanded: -1,
-      detailRowAutoHeight: true,
+      getRowId: params => {
+        if (params.data._type === 'detail') {
+          return params.data.parent.hash + '_detail';
+        }
+        return params.data.hash;
+      },
+      isFullWidthRow: (params) => params.rowNode.data._type === 'detail',
+      fullWidthCellRenderer: DetailCellRenderer,
+      getRowHeight: (params) => {
+        if (params.node.data._type === 'detail') {
+          const count = params.data.parent.files.length;
+          // 28px per row + 33px header + 40px padding + extra buffer for borders/scrollbars
+          return (count * 28) + 33 + 60;
+        }
+        return 28; // Default master row height
+      },
       defaultColDef: {
         suppressHeaderMenuButton: true,
         suppressHeaderContextMenu: true,
       },
-      detailCellRendererParams: (masterParams) => {
-        return {
-          detailGridOptions: {
-            components: {
-              actionCellRenderer: actionCellRenderer,
-              actionHeaderComponent: ActionHeaderComponent,
-            },
-            defaultColDef: {
-              suppressHeaderMenuButton: true,
-              suppressHeaderContextMenu: true,
-            },
-            getRowId: params => params.data.ino,
-            columnDefs: [
-              {
-                headerName: '',
-                width: 45,
-                cellRenderer: (detailParams) => {
-                  const input = document.createElement('input');
-                  input.type = 'radio';
-                  input.name = `radio-group-${masterParams.data.hash}`;
-                  input.checked = detailParams.data.is_original;
-                  input.addEventListener('change', () => {
-                    if (input.checked) {
-                      socket.send(JSON.stringify({
-                        action: 'setOriginalFile',
-                        data: {
-                          hash: masterParams.data.hash,
-                          ino: detailParams.data.ino,
-                        },
-                      }));
-                    }
-                  });
-                  return input;
-                },
-              },
-              {
-                headerName: '',
-                field: 'action',
-                width: 70,
-                cellRenderer: 'actionCellRenderer',
-                headerComponent: 'actionHeaderComponent',
-              },
-              { field: 'path', headerName: 'Path', flex: 1 },
-              {
-                field: 'size',
-                headerName: 'Size',
-                width: 85,
-                valueFormatter: params => formatBytes(params.value)
-              },
-              {
-                field: 'mtime',
-                headerName: 'Modified',
-                width: 185,
-                valueFormatter: params => new Date(params.value).toLocaleString()
-              },
-              {
-                field: 'ctime',
-                headerName: 'Created',
-                width: 185,
-                valueFormatter: params => new Date(params.value).toLocaleString()
-              }
-            ]
-          },
-          getDetailRowData: (params) => {
-            params.successCallback(params.data.files);
-          },
-        }
-      }
     };
 
     const gridDiv = document.querySelector('#myGrid');
