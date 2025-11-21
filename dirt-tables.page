@@ -8,8 +8,11 @@ Icon="fa-search-minus"
   <div id="myGrid" style="height: 100%; width: 100%;" class="ag-theme-balham"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@34.3.1/dist/ag-grid-enterprise.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@34.3.1/dist/ag-grid-community.min.js"></script>
 <script src="/plugins/bobbintb.system.dirt/nodejs/frontend/dirt-tables-helpers.js"></script>
+<script src="/plugins/bobbintb.system.dirt/nodejs/frontend/ag-grid-custom/getDetailRowData.js"></script>
+<script src="/plugins/bobbintb.system.dirt/nodejs/frontend/ag-grid-custom/detailCellRendererParams.js"></script>
+<script src="/plugins/bobbintb.system.dirt/nodejs/frontend/ag-grid-custom/ag-grid-custom.js"></script>
 
 <script>
   let socket;
@@ -31,17 +34,31 @@ Icon="fa-search-minus"
       } else if (message.action === 'removeFile') {
         if (!gridApi) return;
         const { ino } = message.data;
-        gridApi.forEachNode(masterNode => {
-          const fileToRemove = masterNode.data.files.find(file => file.ino === ino);
+        gridApi.forEachNode(node => {
+          if (node.data._isDetailRow || !node.data.files) return;
+
+          const masterData = node.data;
+          const fileToRemove = masterData.files.find(file => file.ino === ino);
           if (fileToRemove) {
-            const masterData = masterNode.data;
             if (masterData.files.length <= 2) {
-              gridApi.applyTransaction({ remove: [masterData] });
+              const detailId = masterData.hash + '_detail';
+              const detailNode = gridApi.getRowNode(detailId);
+              const rowsToRemove = [masterData];
+              if (detailNode) rowsToRemove.push(detailNode.data);
+              gridApi.applyTransaction({ remove: rowsToRemove });
             } else {
               masterData.files = masterData.files.filter(file => file.ino !== ino);
               masterData.count = masterData.files.length;
               masterData.totalSize = masterData.totalSize - fileToRemove.size;
+
               gridApi.applyTransaction({ update: [masterData] });
+
+              const detailId = masterData.hash + '_detail';
+              const detailNode = gridApi.getRowNode(detailId);
+              if (detailNode) {
+                gridApi.redrawRows({ rowNodes: [detailNode] });
+                gridApi.resetRowHeights();
+              }
             }
           }
         });
@@ -163,9 +180,18 @@ Icon="fa-search-minus"
       }
     }
 
+    const flattenedData = window.flattenMasterDetailData(data);
+
+    const detailParamsCallback = window.getDetailCellRendererParams({
+      actionCellRenderer,
+      ActionHeaderComponent,
+      socket,
+      formatBytes
+    });
+
     const gridOptions = {
       columnDefs: [
-        { field: 'hash', headerName: 'Hash', cellRenderer: 'agGroupCellRenderer', width: 350 },
+        { field: 'hash', headerName: 'Hash', width: 350 },
         { field: 'count', headerName: 'Count', width: 71 },
         {
           field: 'totalSize',
@@ -174,87 +200,20 @@ Icon="fa-search-minus"
           valueFormatter: params => formatBytes(params.value)
         }
       ],
-      rowData: data,
+      rowData: flattenedData,
       onGridReady: (params) => {
         gridApi = params.api;
       },
-      masterDetail: true,
       getRowId: params => params.data.hash,
       groupDefaultExpanded: -1,
-      detailRowAutoHeight: true,
       defaultColDef: {
         suppressHeaderMenuButton: true,
         suppressHeaderContextMenu: true,
       },
-      detailCellRendererParams: (masterParams) => {
-        return {
-          detailGridOptions: {
-            components: {
-              actionCellRenderer: actionCellRenderer,
-              actionHeaderComponent: ActionHeaderComponent,
-            },
-            defaultColDef: {
-              suppressHeaderMenuButton: true,
-              suppressHeaderContextMenu: true,
-            },
-            getRowId: params => params.data.ino,
-            columnDefs: [
-              {
-                headerName: '',
-                width: 45,
-                cellRenderer: (detailParams) => {
-                  const input = document.createElement('input');
-                  input.type = 'radio';
-                  input.name = `radio-group-${masterParams.data.hash}`;
-                  input.checked = detailParams.data.is_original;
-                  input.addEventListener('change', () => {
-                    if (input.checked) {
-                      socket.send(JSON.stringify({
-                        action: 'setOriginalFile',
-                        data: {
-                          hash: masterParams.data.hash,
-                          ino: detailParams.data.ino,
-                        },
-                      }));
-                    }
-                  });
-                  return input;
-                },
-              },
-              {
-                headerName: '',
-                field: 'action',
-                width: 70,
-                cellRenderer: 'actionCellRenderer',
-                headerComponent: 'actionHeaderComponent',
-              },
-              { field: 'path', headerName: 'Path', flex: 1 },
-              {
-                field: 'size',
-                headerName: 'Size',
-                width: 85,
-                valueFormatter: params => formatBytes(params.value)
-              },
-              {
-                field: 'mtime',
-                headerName: 'Modified',
-                width: 185,
-                valueFormatter: params => new Date(params.value).toLocaleString()
-              },
-              {
-                field: 'ctime',
-                headerName: 'Created',
-                width: 185,
-                valueFormatter: params => new Date(params.value).toLocaleString()
-              }
-            ]
-          },
-          getDetailRowData: (params) => {
-            params.successCallback(params.data.files);
-          },
-        }
-      }
+      detailCellRendererParams: detailParamsCallback
     };
+
+    window.enableMasterDetail(gridOptions);
 
     const gridDiv = document.querySelector('#myGrid');
     agGrid.createGrid(gridDiv, gridOptions);
@@ -264,7 +223,7 @@ Icon="fa-search-minus"
     const gridWrapper = document.querySelector('#grid-wrapper');
     const offsetTop = gridWrapper.offsetTop;
     const viewportHeight = window.innerHeight;
-    const buffer = 30; // an arbitrary buffer
+    const buffer = 30;
     gridWrapper.style.height = `${viewportHeight - offsetTop - buffer}px`;
   }
 
