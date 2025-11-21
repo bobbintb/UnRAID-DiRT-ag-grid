@@ -54,13 +54,18 @@ Icon="fa-search-minus"
               // Update master row
               gridApi.applyTransaction({ update: [masterData] });
 
-              // Refresh detail row to reflect changes in files array
+              // Update detail row data for sorting and height
               const detailNodeId = masterData.hash + '_detail';
               const detailNode = gridApi.getRowNode(detailNodeId);
               if (detailNode) {
-                gridApi.refreshCells({ rowNodes: [detailNode], force: true });
-                // Recalculate row heights as the number of files changed
-                gridApi.resetRowHeights();
+                 const detailData = detailNode.data;
+                 // Sync sortable fields
+                 detailData.count = masterData.count;
+                 detailData.totalSize = masterData.totalSize;
+                 gridApi.applyTransaction({ update: [detailData] });
+
+                 gridApi.refreshCells({ rowNodes: [detailNode], force: true });
+                 gridApi.resetRowHeights();
               }
             }
           }
@@ -287,23 +292,66 @@ Icon="fa-search-minus"
       }
     }
 
+    const customComparator = (valueA, valueB, nodeA, nodeB, isDescending) => {
+      if (valueA == valueB) {
+        // Both Master and Detail now have 'hash' property
+        const hashA = nodeA.data.hash;
+        const hashB = nodeB.data.hash;
+        if (hashA === hashB) {
+          // Same group. We want Master first.
+          const aIsMaster = nodeA.data._type === 'master';
+          // If A is Master, we want -1 (A < B).
+          // If Descending, grid flips result. So we return 1 (so grid flips to -1).
+          // If Ascending, we return -1.
+          const res = aIsMaster ? -1 : 1;
+          return isDescending ? -res : res;
+        }
+        // Sort by hash to keep groups distinct and deterministic
+        return String(hashA).localeCompare(String(hashB));
+      }
+      if (typeof valueA === 'string') {
+         return valueA.localeCompare(valueB);
+      }
+      return valueA - valueB;
+    };
+
     // Flatten data for Master/Detail simulation
     const rowData = [];
     data.forEach(group => {
       const masterRow = { ...group, _type: 'master' };
+      if (!masterRow.count) masterRow.count = masterRow.files ? masterRow.files.length : 0;
+
       rowData.push(masterRow);
-      rowData.push({ _type: 'detail', parent: masterRow });
+      // Copy sortable fields to detail row so sorting works natively
+      rowData.push({
+          _type: 'detail',
+          parent: masterRow,
+          hash: masterRow.hash,
+          count: masterRow.count,
+          totalSize: masterRow.totalSize
+      });
     });
 
     const gridOptions = {
       columnDefs: [
-        { field: 'hash', headerName: 'Hash', width: 350 },
-        { field: 'count', headerName: 'Count', width: 71 },
+        {
+          field: 'hash',
+          headerName: 'Hash',
+          width: 350,
+          comparator: customComparator
+        },
+        {
+          field: 'count',
+          headerName: 'Count',
+          width: 71,
+          comparator: customComparator
+        },
         {
           field: 'totalSize',
           headerName: 'Freeable',
           width: 90,
-          valueFormatter: params => formatBytes(params.value)
+          valueFormatter: params => formatBytes(params.value),
+          comparator: customComparator
         }
       ],
       rowData: rowData,
@@ -320,7 +368,8 @@ Icon="fa-search-minus"
       fullWidthCellRenderer: DetailCellRenderer,
       getRowHeight: (params) => {
         if (params.node.data._type === 'detail') {
-          const count = params.data.parent.files.length;
+          const files = params.data.parent.files;
+          const count = files ? files.length : 0;
           // 28px per row + 33px header + 40px padding + extra buffer for borders/scrollbars
           return (count * 28) + 33 + 60;
         }
