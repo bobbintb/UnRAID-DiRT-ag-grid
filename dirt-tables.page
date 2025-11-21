@@ -33,42 +33,35 @@ Icon="fa-search-minus"
         if (!gridApi) return;
         const { ino } = message.data;
 
-        // Iterate over all nodes to find the file in master rows
         gridApi.forEachNode(node => {
-            // Skip detail rows (they have fullWidth: true)
             if (node.data.fullWidth) return;
 
             const masterData = node.data;
-            // masterData.files might be undefined if something is wrong, but should be there
             if (!masterData.files) return;
 
             const fileToRemove = masterData.files.find(file => file.ino === ino);
 
             if (fileToRemove) {
                 if (masterData.files.length <= 2) {
-                   // Remove master row
                    gridApi.applyTransaction({ remove: [masterData] });
-                   // Remove detail row if exists (we construct ID as hash + '_detail')
                    const detailId = masterData.hash + '_detail';
                    const detailNode = gridApi.getRowNode(detailId);
                    if (detailNode) {
                        gridApi.applyTransaction({ remove: [detailNode.data] });
                    }
                 } else {
-                   // Update master row data
                    masterData.files = masterData.files.filter(file => file.ino !== ino);
                    masterData.count = masterData.files.length;
                    masterData.totalSize = masterData.totalSize - fileToRemove.size;
                    gridApi.applyTransaction({ update: [masterData] });
 
-                   // Update detail row if exists
                    const detailId = masterData.hash + '_detail';
                    const detailNode = gridApi.getRowNode(detailId);
                    if (detailNode) {
-                       // Reset row heights because file count changed
+                       detailNode.data.count = masterData.count;
+                       detailNode.data.totalSize = masterData.totalSize;
+
                        gridApi.resetRowHeights();
-                       // Refresh the detail cell to re-render the inner grid with new data
-                       // Note: detailNode.data.masterData is a reference to masterData, so it is already updated.
                        gridApi.refreshCells({ rowNodes: [detailNode], force: true });
                    }
                 }
@@ -90,7 +83,42 @@ Icon="fa-search-minus"
     };
   }
 
-  function initializeGrid(data) {
+  function initializeGrid(initialData) {
+
+    const rowData = [];
+    initialData.forEach(master => {
+        master.expanded = true;
+        rowData.push(master);
+        rowData.push({
+            fullWidth: true,
+            masterData: master,
+            hash: master.hash + '_detail',
+            count: master.count,
+            totalSize: master.totalSize
+        });
+    });
+
+    const customComparator = (valueA, valueB, nodeA, nodeB, isDescending) => {
+        const getHash = (node) => node.data.fullWidth ? node.data.masterData.hash : node.data.hash;
+        const hashA = getHash(nodeA);
+        const hashB = getHash(nodeB);
+
+        if (hashA !== hashB) {
+             if (valueA === valueB) {
+                 // Secondary sort by Hash to keep groups together
+                 // This ensures that if values are equal, rows with the same hash stay together
+                 return hashA > hashB ? 1 : -1;
+             }
+             return valueA > valueB ? 1 : -1;
+        } else {
+             const isAMaster = !nodeA.data.fullWidth;
+             const isBMaster = !nodeB.data.fullWidth;
+
+             if (isAMaster && !isBMaster) return isDescending ? 1 : -1;
+             if (!isAMaster && isBMaster) return isDescending ? -1 : 1;
+             return 0;
+        }
+    };
 
     function actionCellRenderer(params) {
       const eGui = document.createElement('div');
@@ -193,7 +221,6 @@ Icon="fa-search-minus"
       }
     }
 
-    // Custom Master Cell Renderer to handle Expand/Collapse
     class MasterCellRenderer {
         init(params) {
             this.params = params;
@@ -201,15 +228,12 @@ Icon="fa-search-minus"
             this.eGui.style.display = 'flex';
             this.eGui.style.alignItems = 'center';
 
-            // Icon
             this.eIcon = document.createElement('span');
-            // Use FontAwesome icons
             this.eIcon.innerHTML = params.data.expanded ? '<i class="fa fa-minus-square-o"></i>' : '<i class="fa fa-plus-square-o"></i>';
             this.eIcon.className = 'master-expand-icon';
             this.eIcon.style.cursor = 'pointer';
             this.eIcon.style.marginRight = '8px';
 
-            // Value
             this.eValue = document.createElement('span');
             this.eValue.innerText = params.value;
 
@@ -247,7 +271,9 @@ Icon="fa-search-minus"
                 const detailRow = {
                     fullWidth: true,
                     masterData: data,
-                    hash: data.hash + '_detail'
+                    hash: data.hash + '_detail',
+                    count: data.count,
+                    totalSize: data.totalSize
                 };
 
                 api.applyTransaction({ add: [detailRow], addIndex: rowNode.rowIndex + 1 });
@@ -255,14 +281,12 @@ Icon="fa-search-minus"
         }
     }
 
-    // Detail Cell Renderer (Full Width)
     class DetailCellRenderer {
         init(params) {
             this.eGui = document.createElement('div');
             this.eGui.style.width = '100%';
             this.eGui.style.height = '100%';
             this.eGui.classList.add('detail-grid-wrapper');
-            // Style to match AG Grid's detail look
             this.eGui.style.borderTop = '1px solid #bdc3c7';
             this.eGui.style.backgroundColor = '#f5f7f7';
             this.eGui.style.padding = '10px';
@@ -333,7 +357,6 @@ Icon="fa-search-minus"
                 ]
             };
 
-            // Create the nested grid
             this.detailGridApi = agGrid.createGrid(this.eGui, detailGridOptions);
         }
 
@@ -356,21 +379,27 @@ Icon="fa-search-minus"
             field: 'hash',
             headerName: 'Hash',
             cellRenderer: MasterCellRenderer,
-            width: 350
+            width: 350,
+            comparator: customComparator
         },
-        { field: 'count', headerName: 'Count', width: 71 },
+        {
+            field: 'count',
+            headerName: 'Count',
+            width: 71,
+            comparator: customComparator
+        },
         {
           field: 'totalSize',
           headerName: 'Freeable',
           width: 90,
-          valueFormatter: params => formatBytes(params.value)
+          valueFormatter: params => formatBytes(params.value),
+          comparator: customComparator
         }
       ],
-      rowData: data,
+      rowData: rowData,
       onGridReady: (params) => {
         gridApi = params.api;
       },
-      // Custom Full Width Row configuration
       getRowId: params => {
           if (params.data.fullWidth) return params.data.hash;
           return params.data.hash;
@@ -380,8 +409,6 @@ Icon="fa-search-minus"
       getRowHeight: params => {
           if (params.node.data.fullWidth) {
                const count = params.data.masterData.files.length;
-               // Formula: (count * 28) + header(33) + padding(20)
-               // Memory said (count * 28) + 33 + 60. Let's stick to memory or similar.
                return (count * 28) + 33 + 60;
           }
           return 28;
@@ -390,7 +417,8 @@ Icon="fa-search-minus"
         suppressHeaderMenuButton: true,
         suppressHeaderContextMenu: true,
       },
-      groupDefaultExpanded: -1, // Not strictly used but harmless
+      groupDefaultExpanded: -1,
+      embedFullWidthRows: true,
     };
 
     const gridDiv = document.querySelector('#myGrid');
@@ -401,7 +429,7 @@ Icon="fa-search-minus"
     const gridWrapper = document.querySelector('#grid-wrapper');
     const offsetTop = gridWrapper.offsetTop;
     const viewportHeight = window.innerHeight;
-    const buffer = 30; // an arbitrary buffer
+    const buffer = 30;
     gridWrapper.style.height = `${viewportHeight - offsetTop - buffer}px`;
   }
 

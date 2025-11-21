@@ -1,44 +1,50 @@
 import pytest
 from playwright.sync_api import Page, expect
 
-def test_master_detail_functionality(page: Page):
+def test_sorting_and_expansion(page: Page):
+    page.on("console", lambda msg: print(f"BROWSER: {msg.text}"))
     # Go to the page
     page.goto("http://localhost/plugins/bobbintb.system.dirt/index.php")
 
     # Wait for the grid to load
     page.wait_for_timeout(10000)
 
-    # Check that the AG-Grid container is present
-    grid = page.locator('#myGrid')
-    expect(grid).to_be_visible()
+    # 1. Verify Default Expansion
+    print("Verifying default expansion...")
+    detail_rows = page.locator('.detail-grid-wrapper')
+    expect(detail_rows.first).to_be_visible()
 
-    # Find the first row in the grid.
-    # We use the first row of the master grid.
-    first_row = page.locator('.ag-row[row-index="0"]').first
-    expect(first_row).to_be_visible()
+    # 2. Verify Sorting
+    print("Verifying sorting...")
 
-    # Find the expand icon.
-    # In the custom implementation, we used a span with class 'master-expand-icon' containing a FontAwesome icon.
-    expand_icon = first_row.locator('.master-expand-icon')
+    # Sort by 'Count' (Click header)
+    count_header = page.locator('.ag-header-cell-label', has_text="Count")
+    count_header.click()
 
-    # Fallback or verify strictness
-    if expand_icon.count() == 0:
-        # Maybe strictly look for the FA icon
-        expand_icon = first_row.locator('.fa-plus-square-o')
+    # Wait for sort
+    page.wait_for_timeout(2000)
 
-    expect(expand_icon).to_be_visible()
-    expand_icon.click()
+    # Debug info
+    main_rows = page.locator('.ag-row:not(.detail-grid-wrapper .ag-row)')
+    count = main_rows.count()
+    print(f"Main rows count: {count}")
 
-    # Wait for detail row to appear.
-    # In our custom implementation, the detail cell renderer creates a div with class 'detail-grid-wrapper'.
-    detail_wrapper = page.locator('.detail-grid-wrapper').first
-    expect(detail_wrapper).to_be_visible()
+    for k in range(min(6, count)):
+        row = main_rows.nth(k)
+        classes = row.get_attribute("class")
+        print(f"Row {k} classes: {classes}")
+        # Try to get row ID
+        row_id = row.get_attribute("row-id")
+        print(f"Row {k} ID: {row_id}")
 
-    # Verify detail grid exists inside.
-    # It should contain another AG Grid root.
-    detail_grid_root = detail_wrapper.locator('.ag-root-wrapper')
-    expect(detail_grid_root).to_be_visible()
+    for i in range(0, 6, 2):
+        master_idx = i
+        detail_idx = i + 1
 
-    # Optional: Check that the icon changed to minus
-    minus_icon = first_row.locator('.fa-minus-square-o')
-    expect(minus_icon).to_be_visible()
+        master_row = main_rows.nth(master_idx)
+        detail_row = main_rows.nth(detail_idx)
+
+        expect(master_row.locator('.detail-grid-wrapper')).not_to_be_visible()
+        expect(detail_row.locator('.detail-grid-wrapper')).to_be_visible()
+
+    print("Sorting verification passed.")
