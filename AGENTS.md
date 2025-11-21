@@ -102,11 +102,11 @@ The frontend for this Unraid plugin consists of `.page` files, which are `php` f
 
 ### Frontend Libraries
 
-This project uses AG Grid 34.3.1. Before implementing new features or customizations, **you must** consult the official documentation to see if a built-in solution exists. This is to avoid complication as well as wasted time and effort custom coding functions or features that are already natively handled by the AG Grid library.
+This project uses AG Grid 32.3.9. This version is specifically used because of performance issues in later versions. Before implementing new features or customizations, **you must** consult the official documentation to see if a built-in solution exists. This is to avoid complication as well as wasted time and effort custom coding functions or features that are already natively handled by the AG Grid library.
 
 - **`dirt-tables.page`**:
 
-    - **Library**: AG Grid v34.3.1
+    - **Library**: AG Grid v32.3.9
 
     - **Documentation**: [https://www.ag-grid.com/javascript-data-grid/getting-started/](https://www.ag-grid.com/javascript-data-grid/getting-started/ "null")
 
