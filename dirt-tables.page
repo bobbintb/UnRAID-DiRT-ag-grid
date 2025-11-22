@@ -2,6 +2,7 @@ Menu="DiskUtilities"
 Title="Deduplication in Real-Time"
 Icon="fa-search-minus"
 ---
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 <link rel="stylesheet" type="text/css" href="/plugins/bobbintb.system.dirt/nodejs/frontend/css/dirt.css">
 
 <div id="grid-wrapper" style="height: 100%; width: 100%;">
@@ -87,6 +88,41 @@ Icon="fa-search-minus"
   }
 
   function initializeGrid(data) {
+    const collapsedGroups = new Set();
+
+    function GroupCellRenderer(params) {
+      const eGui = document.createElement('div');
+      eGui.style.display = 'flex';
+      eGui.style.alignItems = 'center';
+
+      const hash = params.value;
+      // Default is expanded (not in set).
+      // If in set -> collapsed (right chevron).
+      // If not in set -> expanded (down chevron).
+      const isCollapsed = collapsedGroups.has(hash);
+      const iconClass = isCollapsed ? 'fa-chevron-right' : 'fa-chevron-down';
+
+      eGui.innerHTML = `
+        <i class="fa ${iconClass}" style="cursor: pointer; margin-right: 8px; width: 12px;"></i>
+        <span>${hash}</span>
+      `;
+
+      const icon = eGui.querySelector('i');
+      icon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (collapsedGroups.has(hash)) {
+          collapsedGroups.delete(hash);
+          icon.className = 'fa fa-chevron-down';
+        } else {
+          collapsedGroups.add(hash);
+          icon.className = 'fa fa-chevron-right';
+        }
+        params.api.onFilterChanged();
+      });
+
+      return eGui;
+    }
+
     function actionCellRenderer(params) {
       const eGui = document.createElement('div');
       eGui.innerHTML = `
@@ -338,7 +374,8 @@ Icon="fa-search-minus"
           field: 'hash',
           headerName: 'Hash',
           width: 350,
-          comparator: customComparator
+          comparator: customComparator,
+          cellRenderer: GroupCellRenderer
         },
         {
           field: 'count',
@@ -374,6 +411,13 @@ Icon="fa-search-minus"
           return (count * 28) + 33 + 60;
         }
         return 28; // Default master row height
+      },
+      isExternalFilterPresent: () => collapsedGroups.size > 0,
+      doesExternalFilterPass: (node) => {
+        if (node.data._type === 'detail') {
+           return !collapsedGroups.has(node.data.parent.hash);
+        }
+        return true;
       },
       defaultColDef: {
         suppressHeaderMenuButton: true,
